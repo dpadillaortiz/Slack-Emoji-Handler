@@ -1,13 +1,16 @@
 import os
 import json
 import requests
+from requests import Response
+import datetime
+from zoneinfo import ZoneInfo
 
 from slack_bolt import App
 from slack_sdk.errors import SlackApiError
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 
 import logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -24,15 +27,26 @@ app = App(
     signing_secret=SLACK_SIGNING_SECRET
 )
 
-def blocks_message(emoji, user_id):
-    text=f":{emoji}: was uploaded by <@{user_id}>"
+def convert_epoch_timestamp(timestamp: float) -> str:
+    """Converts a Unix timestamp to a human-readable 12-hour datetime string in Pacific Time (Los Angeles).
+    Args:
+        timestamp: The Unix timestamp (integer or float)
+    Returns:
+        A string representing the date and time in Pacific Time (12-hour format).
+    """
+    pacific_time = datetime.datetime.fromtimestamp(timestamp, tz=ZoneInfo("America/Los_Angeles"))
+    return pacific_time.strftime("%Y-%m-%d %I:%M:%S %p %Z")
+
+def blocks_message(emoji: str, user_id:str, ts:str) -> str:
+    date=convert_epoch_timestamp(float(ts))
+    text=f":{emoji}: was uploaded by <@{user_id}> on {date}"
     with open('blocks.json', 'r') as file:
         blocks = json.load(file)
         blocks["blocks"][0]["text"]["text"]=text
         blocks["blocks"][1]["elements"][0]["value"]=emoji
     return json.dumps(blocks["blocks"])
 
-def update_source_msg(response_url, text):
+def update_source_msg(response_url:str, text:str) -> Response:
     payload = {
         "replace_original": "true",
         "text": f"{text}"
@@ -40,7 +54,7 @@ def update_source_msg(response_url, text):
     response = requests.post(response_url, data=json.dumps(payload))
     return response
 
-def get_actor_id(event_timestamp):
+def get_actor_id(event_timestamp:str) -> str:
     '''
     Authorization
     - The token must be a Slack user token (beginning with xoxp) associated with an Enterprise Grid organization owner
@@ -64,41 +78,42 @@ def get_actor_id(event_timestamp):
 # Unhandled request ({'type': 'event_callback', 'event': {'type': 'emoji_changed', 'subtype': 'add'}})
 # [Suggestion] You can handle this type of event with the following listener function:
 @app.event({'type': 'emoji_changed', 'subtype': 'add'})
-def handle_emoji_changed_events(ack, body, logger, event, client):
+def handle_emoji_changed_events(ack, body, event, client):
     ack()
     emoji=event["name"]
-    actor_id = get_actor_id(event_timestamp=body["event_time"])
+    ts=body["event_time"]
+    actor_id = get_actor_id(event_timestamp=ts)
+
     client.chat_postMessage(
         channel="C0923REDJ0Z",
         text=f":{emoji}: was uploaded by <@{actor_id}>",
-        blocks=blocks_message(emoji, actor_id)
+        blocks=blocks_message(emoji, actor_id, ts)
     )
-    # logger.info(body)
 
 # Unhandled request ({'type': 'block_actions', 'action_id': 'remove_emoji'})
 # [Suggestion] You can handle this type of event with the following listener function:
 @app.action("remove_emoji")
-def handle_remove_button(ack, body, client, logger):
+def handle_remove_button(ack, body, client):
     ack()
+    ts=float(body["actions"][0]["action_ts"])
+    date=convert_epoch_timestamp(ts)
     emoji=body["actions"][0]["value"]
     user_id=body["user"]["id"]
     prev_message=body["message"]["text"]
-    new_message=f":x: `:{emoji}:` was removed by <@{user_id}>"
+    new_message=f":x: `:{emoji}:` was removed by <@{user_id}> on {date}"
     client.admin_emoji_remove(
         token=SLACK_USER_TOKEN,
         name=emoji
     )
-    # logger.info(body)
-
     # https://api.slack.com/interactivity/handling#updating_message_response
     update_source_msg(body["response_url"], f"{prev_message}\n{new_message}")
 
 # Unhandled request ({'type': 'event_callback', 'event': {'type': 'emoji_changed', 'subtype': 'remove'}})
 # [Suggestion] You can handle this type of event with the following listener function:
-@app.event("emoji_changed")
-def handle_emoji_removal(ack, body, logger):
+@app.event({'type': 'emoji_changed', 'subtype': 'remove'})
+def handle_emoji_removal(ack):
     ack()
-    logger.info(body)
+    pass # Do nothing
 
 if __name__ == "__main__":      
     SocketModeHandler(app, SLACK_APP_TOKEN).start()
