@@ -15,6 +15,7 @@
 		"text": "Remove Emoji",
 		"emoji": true
 	},
+	"callback_id": "memes",
 	"blocks": [
 		{
 			"type": "input",
