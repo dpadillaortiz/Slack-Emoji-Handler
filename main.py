@@ -136,7 +136,7 @@ def handle_emoji_removal(ack):
 
 # Unhandled request ({'type': 'view_submission', 'view': {'type': 'modal', 'callback_id': ''}})
 # [Suggestion] You can handle this type of event with the following listener function:
-@app.view({'type': 'view_submission', 'view': {'type': 'modal', 'callback_id': ''}})
+@app.view({'type': 'view_submission', 'view': {'type': 'modal', 'callback_id': 'memes'}})
 def handle_view_submission_events(ack, body, logger):
     ack()
     logger.info(body)
