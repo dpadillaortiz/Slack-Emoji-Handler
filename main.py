@@ -39,6 +39,11 @@ def convert_epoch_timestamp(timestamp: float) -> str:
     pacific_time = datetime.datetime.fromtimestamp(timestamp, tz=ZoneInfo("America/Los_Angeles"))
     return pacific_time.strftime("%Y-%m-%d %I:%M:%S %p %Z")
 
+def view_block():
+    with open('modal.json', 'r') as file:
+        blocks = json.load(file)
+    return json.dumps(blocks)
+
 def blocks_message(emoji: str, user_id:str, ts:str) -> str:
     date=convert_epoch_timestamp(float(ts))
     text=f":{emoji}: was uploaded by <@{user_id}> on {date}"
@@ -97,6 +102,12 @@ def handle_emoji_changed_events(ack, body, event, client):
 @app.action("remove_emoji")
 def handle_remove_button(ack, body, client):
     ack()
+    trigger_id=body["trigger_id"]
+    client.views_open(
+        view=view_block(),
+        trigger_id=trigger_id
+    )
+    """
     ts=float(body["actions"][0]["action_ts"])
     date=convert_epoch_timestamp(ts)
     emoji=body["actions"][0]["value"]
@@ -115,13 +126,20 @@ def handle_remove_button(ack, body, client):
         channel=user_id,
         text=new_message
     )
-
+"""
 # Unhandled request ({'type': 'event_callback', 'event': {'type': 'emoji_changed', 'subtype': 'remove'}})
 # [Suggestion] You can handle this type of event with the following listener function:
 @app.event({'type': 'emoji_changed', 'subtype': 'remove'})
 def handle_emoji_removal(ack):
     ack()
     pass # Do nothing
+
+# Unhandled request ({'type': 'view_submission', 'view': {'type': 'modal', 'callback_id': ''}})
+# [Suggestion] You can handle this type of event with the following listener function:
+@app.view({'type': 'view_submission', 'view': {'type': 'modal', 'callback_id': ''}})
+def handle_view_submission_events(ack, body, logger):
+    ack()
+    logger.info(body)
 
 if __name__ == "__main__":      
     SocketModeHandler(app, SLACK_APP_TOKEN).start()
