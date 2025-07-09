@@ -4,6 +4,8 @@ import requests
 from requests import Response
 import datetime
 from zoneinfo import ZoneInfo
+import re
+
 
 from slack_bolt import App
 from slack_sdk.errors import SlackApiError
@@ -98,15 +100,21 @@ def handle_remove_button(ack, body, client):
     ts=float(body["actions"][0]["action_ts"])
     date=convert_epoch_timestamp(ts)
     emoji=body["actions"][0]["value"]
-    user_id=body["user"]["id"]
+    actor_id=body["user"]["id"]
     prev_message=body["message"]["text"]
-    new_message=f":x: `:{emoji}:` was removed by <@{user_id}> on {date}"
+    user_id=re.findall(r"<@([^>]+)>", prev_message)[0]
+    new_message=f":x: `:{emoji}:` was removed by <@{actor_id}> on {date}"
     client.admin_emoji_remove(
         token=SLACK_USER_TOKEN,
         name=emoji
     )
     # https://api.slack.com/interactivity/handling#updating_message_response
     update_source_msg(body["response_url"], f"{prev_message}\n{new_message}")
+
+    client.chat_postMessage(
+        channel=user_id,
+        text=new_message
+    )
 
 # Unhandled request ({'type': 'event_callback', 'event': {'type': 'emoji_changed', 'subtype': 'remove'}})
 # [Suggestion] You can handle this type of event with the following listener function:
