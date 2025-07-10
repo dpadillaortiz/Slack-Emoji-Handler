@@ -1,7 +1,7 @@
 {
    "envelope_id":"6f2e1bfa-360f-4399-8b6d-1f88c02e0253",
    "payload":{
-      "token":"fKwAhlpTIXDnundHLb5GfFYM",
+      "token":"some-string-of-text",
       "team_id":"T08NXSDNGCB",
       "enterprise_id":"E08NY9QJLSW",
       "api_app_id":"A094F1W8E2W",
@@ -9,7 +9,7 @@
          "type":"emoji_changed",
          "subtype":"add",
          "name":"profile",
-         "value":"https:\/\/emoji.slack-edge.com\/T08NY9QJLSW\/profile\/383da0ea71393398.jpg",
+         "value":"some-string-of-text",
          "event_ts":"1751677629.004200"
       },
       "type":"event_callback",

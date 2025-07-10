@@ -1,5 +1,5 @@
 {
-   "envelope_id":"67db719a-c64c-414d-bdd3-f3db39b2117d",
+   "envelope_id":"some-string-of-text",
    "payload":{
       "type":"block_actions",
       "user":{
@@ -8,15 +8,15 @@
          "name":"sd08nxs6qp51_user",
          "team_id":"T08NXSDNGCB"
       },
-      "api_app_id":"A094F1W8E2W",
-      "token":"fKwAhlpTIXDnundHLb5GfFYM",
+      "api_app_id":"some-string-of-text",
+      "token":"some-string-of-text",
       "container":{
          "type":"message",
          "message_ts":"1751785658.540919",
          "channel_id":"C0923REDJ0Z",
          "is_ephemeral":false
       },
-      "trigger_id":"9153555926290.8780330632914.ce8342bf3a3c394b3e24ed25369da965",
+      "trigger_id":"some-string-of-text",
       "team":null,
       "enterprise":{
          "id":"E08NY9QJLSW",
@@ -69,7 +69,7 @@
             
          }
       },
-      "response_url":"https://hooks.slack.com/actions/E08NY9QJLSW/9153555926274/dQooXUZ1RKYIdi8Ij10hENXC",
+      "response_url":"some-string-of-text",
       "actions":[
          {
             "action_id":"remove_emoji",
