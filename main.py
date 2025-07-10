@@ -12,7 +12,7 @@ from slack_sdk.errors import SlackApiError
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 
 import logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -134,11 +134,19 @@ def handle_emoji_removal(ack):
     ack()
     pass # Do nothing
 
-# Unhandled request ({'type': 'view_submission', 'view': {'type': 'modal', 'callback_id': ''}})
+# Unhandled request ({'type': 'view_submission', 'view': {'type': 'modal', 'callback_id': 'memes'}})
 # [Suggestion] You can handle this type of event with the following listener function:
-@app.view({'type': 'view_submission', 'view': {'type': 'modal', 'callback_id': 'memes'}})
-def handle_view_submission_events(ack, body, logger):
+@app.view("memes")
+def handle_view_submission_events(ack, body, client, view, logger):
     ack()
+    justification=view["state"]["values"]["input_block"]["submit_button"]["value"]
+    # TODO 
+    # - pass the user_id of the uploader to view
+    # - pass the user_id of moderator in the message to uploader
+    client.chat_postMessage(
+        channel="U08NY9QJZ34",
+        text=justification
+    )
     logger.info(body)
 
 if __name__ == "__main__":      
