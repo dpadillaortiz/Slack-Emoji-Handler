@@ -10,6 +10,7 @@
 		"text": "Cancel",
 		"emoji": true
 	},
+	"private_metadata":"",
 	"title": {
 		"type": "plain_text",
 		"text": "Remove Emoji",
