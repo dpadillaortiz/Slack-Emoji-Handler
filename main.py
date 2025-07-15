@@ -39,9 +39,10 @@ def convert_epoch_timestamp(timestamp: float) -> str:
     pacific_time = datetime.datetime.fromtimestamp(timestamp, tz=ZoneInfo("America/Los_Angeles"))
     return pacific_time.strftime("%Y-%m-%d %I:%M:%S %p %Z")
 
-def view_block():
+def view_block(private_metadata: dict):
     with open('modal.json', 'r') as file:
         blocks = json.load(file)
+        blocks["private_metadata"]=json.dumps(private_metadata)
     return json.dumps(blocks)
 
 def blocks_message(emoji: str, user_id:str, ts:str) -> str:
@@ -80,8 +81,7 @@ def get_actor_id(event_timestamp:str) -> str:
     for event in response.json().get("entries"):
         if event.get("date_create") == event_timestamp:
             return event.get("actor").get("user").get("id")
-    
-# Event payload: (message: {"envelope_id":"6f2e1bfa-360f-4399-8b6d-1f88c02e0253","payload":{"token":"fKwAhlpTIXDnundHLb5GfFYM","team_id":"T08NXSDNGCB","enterprise_id":"E08NY9QJLSW","api_app_id":"A094F1W8E2W","event":{"type":"emoji_changed","subtype":"add","name":"profile","value":"https:\/\/emoji.slack-edge.com\/T08NY9QJLSW\/profile\/383da0ea71393398.jpg","event_ts":"1751677629.004200"},"type":"event_callback","event_id":"Ev0948DDP61Z","event_time":1751677629,"authorizations":[{"enterprise_id":"E08NY9QJLSW","team_id":null,"user_id":"U0942DUS631","is_bot":true,"is_enterprise_install":true}],"is_ext_shared_channel":false},"type":"events_api","accepts_response_payload":false,"retry_attempt":2,"retry_reason":"timeout"})
+        
 # Unhandled request ({'type': 'event_callback', 'event': {'type': 'emoji_changed', 'subtype': 'add'}})
 # [Suggestion] You can handle this type of event with the following listener function:
 @app.event({'type': 'emoji_changed', 'subtype': 'add'})
@@ -103,10 +103,15 @@ def handle_emoji_changed_events(ack, body, event, client):
 def handle_remove_button(ack, body, client):
     ack()
     trigger_id=body["trigger_id"]
+    private_metadata={
+        "emoji":body["actions"][0]["value"],
+        "user_id":re.findall(r"<@([^>]+)>", body["message"]["text"])[0]
+    }
     client.views_open(
-        view=view_block(),
+        view=view_block(private_metadata),
         trigger_id=trigger_id
     )
+    # Moving this code block to views
     """
     ts=float(body["actions"][0]["action_ts"])
     date=convert_epoch_timestamp(ts)
@@ -126,7 +131,7 @@ def handle_remove_button(ack, body, client):
         channel=user_id,
         text=new_message
     )
-"""
+    """
 # Unhandled request ({'type': 'event_callback', 'event': {'type': 'emoji_changed', 'subtype': 'remove'}})
 # [Suggestion] You can handle this type of event with the following listener function:
 @app.event({'type': 'emoji_changed', 'subtype': 'remove'})
@@ -139,14 +144,25 @@ def handle_emoji_removal(ack):
 @app.view("memes")
 def handle_view_submission_events(ack, body, client, view, logger):
     ack()
-    justification=view["state"]["values"]["input_block"]["submit_button"]["value"]
-    # TODO 
-    # - pass the user_id of the uploader to view
-    # - pass the user_id of moderator in the message to uploader
-    client.chat_postMessage(
-        channel="U08NY9QJZ34",
-        text=justification
+    private_metadata=json.loads(view["private_metadata"])
+    client.admin_emoji_remove(
+        token=SLACK_USER_TOKEN,
+        name=private_metadata["emoji"]
     )
+    justification=view["state"]["values"]["input_block"]["submit_button"]["value"]
+    text=f"<@{body["user"]["id"]}> removed your emoji, :{private_metadata["emoji"]}:"
+
+    if justification == None:
+        client.chat_postMessage(
+            channel=private_metadata["user_id"],
+            text=text
+        )
+    else:
+        client.chat_postMessage(
+            channel=private_metadata["user_id"],
+            text=f"{text} {justification}"
+        )
+
     logger.info(body)
 
 if __name__ == "__main__":      
