@@ -1,15 +1,16 @@
 import os
 import json
 import requests
-from requests import Response
 import datetime
 from zoneinfo import ZoneInfo
 import re
+import aws_secrets
+import ui_templates
 
 
 from slack_bolt import App
+from slack_bolt.adapter.aws_lambda import SlackRequestHandler
 from slack_sdk.errors import SlackApiError
-from slack_bolt.adapter.socket_mode import SocketModeHandler
 
 
 import logging
@@ -18,33 +19,20 @@ logging.basicConfig(level=logging.DEBUG)
 from dotenv import load_dotenv
 load_dotenv()
 
-SLACK_APP_TOKEN= os.getenv("SLACK_APP_TOKEN")
-SLACK_SIGNING_SECRET = os.getenv("SLACK_SIGNING_SECRET")
-SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
-SLACK_USER_TOKEN = os.getenv("SLACK_USER_TOKEN")
+SLACK_SIGNING_SECRET = aws_secrets.get_signing_secret()
+SLACK_BOT_TOKEN = aws_secrets.get_bot_token()
+SLACK_USER_TOKEN = aws_secrets.get_user_token()
 MOD_CHANNEL = os.getenv("MOD_CHANNEL")
 
 # https://api.slack.com/authentication/verifying-requests-from-slack
 # Initializes your app with your bot token and signing secret
 app = App(
     token=SLACK_BOT_TOKEN,
-    signing_secret=SLACK_SIGNING_SECRET
+    signing_secret=SLACK_SIGNING_SECRET,
+    process_before_response=True
 )
-"""
-timestamps=[1752704688.297829, 1752788052.525229, 1752788621.798249]
 
-for ts in timestamps:
-    try:
-        app.client.chat_delete(
-            channel="D096402B45B",
-            ts=ts
-        )
-    except SlackApiError as e:
-        if e.response["error"] == "not_found":
-            print("Message not found, it may have already been deleted.")
-        else:
-            print(f"Error deleting message: {e.response['error']}")
-"""
+# Helper functions
 def get_todays_date() -> str:
     """Returns today's date in the format %Y-%m-%d %I:%M:%S %p %Z."""
     # Get the current datetime object
@@ -55,31 +43,7 @@ def get_todays_date() -> str:
     formatted_datetime = now_aware.strftime("%Y-%m-%d %I:%M:%S %p %Z")
     return formatted_datetime
 
-def convert_epoch_timestamp(timestamp: float) -> str:
-    """Converts a Unix timestamp to a human-readable 12-hour datetime string in Pacific Time (Los Angeles).
-    Args:
-        timestamp: The Unix timestamp (integer or float)
-    Returns:
-        A string representing the date and time in Pacific Time (12-hour format).
-    """
-    pacific_time = datetime.datetime.fromtimestamp(timestamp, tz=ZoneInfo("America/Los_Angeles"))
-    return pacific_time.strftime("%Y-%m-%d %I:%M:%S %p %Z")
-
-def view_block(private_metadata: dict):
-    with open('modal.json', 'r') as file:
-        blocks = json.load(file)
-        blocks["private_metadata"]=json.dumps(private_metadata)
-    return json.dumps(blocks)
-
-def blocks_message(emoji: str, user_id:str, ts:str) -> str:
-    date=convert_epoch_timestamp(float(ts))
-    text=f":{emoji}: was uploaded by <@{user_id}> on {date}"
-    with open('blocks.json', 'r') as file:
-        blocks = json.load(file)
-        blocks["blocks"][0]["text"]["text"]=text
-        blocks["blocks"][1]["elements"][0]["value"]=emoji
-    return json.dumps(blocks["blocks"])
-
+# Core Functionality
 def get_actor_id(event_timestamp:str) -> str:
     '''
     Authorization
@@ -99,8 +63,10 @@ def get_actor_id(event_timestamp:str) -> str:
     for event in response.json().get("entries"):
         if event.get("date_create") == event_timestamp:
             return event.get("actor").get("user").get("id")
-        
-@app.event({'type': 'emoji_changed', 'subtype': 'add'})
+
+def respond_to_slack_within_3_seconds(ack):
+    ack()
+
 def handle_emoji_changed_events(ack, body, event, client):
     ack()
     emoji=event["name"]
@@ -110,10 +76,10 @@ def handle_emoji_changed_events(ack, body, event, client):
     client.chat_postMessage(
         channel=MOD_CHANNEL,
         text=f":{emoji}: was uploaded by <@{actor_id}>",
-        blocks=blocks_message(emoji, actor_id, ts)
+        blocks=ui_templates.update_blocks_message(emoji, actor_id, ts)
     )
+app.event({'type': 'emoji_changed', 'subtype': 'add'})(ack=respond_to_slack_within_3_seconds, lazy=[handle_emoji_changed_events])
 
-@app.action("remove_emoji")
 def handle_remove_button(ack, body, client):
     ack()
     trigger_id=body["trigger_id"]
@@ -124,16 +90,16 @@ def handle_remove_button(ack, body, client):
         "current_message":body["message"]["blocks"][0]["text"]["text"]
     }
     client.views_open(
-        view=view_block(private_metadata),
+        view=ui_templates.revoke_message_modal(private_metadata),
         trigger_id=trigger_id
     )
+app.action("remove_emoji")(ack=respond_to_slack_within_3_seconds, lazy=[handle_remove_button])
 
-@app.event({'type': 'emoji_changed', 'subtype': 'remove'})
 def handle_emoji_removal(ack):
     ack()
-    pass
+    pass # Do nothing, this is just to acknowledge the event
+app.event({'type': 'emoji_changed', 'subtype': 'remove'})(ack=respond_to_slack_within_3_seconds, lazy=[handle_emoji_removal])
 
-@app.view("memes")
 def handle_view_submission_events(ack, body, client, view, logger):
     ack()
     today = get_todays_date()
@@ -160,8 +126,10 @@ def handle_view_submission_events(ack, body, client, view, logger):
             channel=private_metadata["user_id"],
             text=f"{text}\nJustification: {justification}"
         )
-
     logger.info(body)
+app.view("revoke_message_modal")(ack=respond_to_slack_within_3_seconds, lazy=[handle_view_submission_events])
 
-if __name__ == "__main__":      
-    SocketModeHandler(app, SLACK_APP_TOKEN).start()
+# AWS Lambda entrypoint
+def handler(event, context):
+    slack_handler = SlackRequestHandler(app=app)
+    return slack_handler.handle(event, context)
