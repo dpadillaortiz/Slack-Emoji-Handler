@@ -1,2 +1,9 @@
 .venv
 .env
+.*
+.terraform*
+not_needed
+slack_layer
+responses
+*.zip
+terraform.*
